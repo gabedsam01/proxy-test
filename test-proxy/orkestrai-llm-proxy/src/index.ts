@@ -27,12 +27,12 @@ function parseModel(raw: string): ParsedModel | null {
 }
 
 async function getApiKey(userId: string, provider: string, env: Env): Promise<string | null> {
-  const providerMapping: Record<string, string> = {
-    openai: 'openai',
-    google: 'gemini',
-    anthropic: 'anthropic',
-    openrouter: 'openrouter',
-  };
+  const providerMap: Record<string, string> = {
+  openai: 'openai',
+  google: 'google',   // ← era 'gemini'
+  anthropic: 'anthropic',
+  openrouter: 'openrouter',
+};
   const supabaseProvider = providerMapping[provider];
   if (!supabaseProvider) return null;
 
