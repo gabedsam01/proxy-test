@@ -68,9 +68,15 @@ export async function routeToProvider(
   apiKey: string,
   model: string,
   corsHeaders: Record<string, string>,
+  isResponsesAPI: boolean = false,
 ): Promise<Response> {
   if (provider === 'anthropic') {
-    return routeAnthropic(body, apiKey, model, corsHeaders);
+    const res = await routeAnthropic(body, apiKey, model, corsHeaders);
+    if (isResponsesAPI && res.ok) {
+      const chatRes = await res.json() as any;
+      return convertToResponsesAPI(chatRes, corsHeaders);
+    }
+    return res;
   }
 
   let url: string;
@@ -102,8 +108,10 @@ export async function routeToProvider(
 
   if (provider === 'google') {
     // Transform OpenAI messages to Google contents
+    // Handle cases where messages might be missing in Responses API format
+    const messages = body.messages || [];
     upstreamBody = {
-      contents: body.messages.map(msg => ({
+      contents: messages.map(msg => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }],
       })),
@@ -114,7 +122,7 @@ export async function routeToProvider(
       },
     };
     // If there is a system message, handle it specially for Gemini
-    const systemMsg = body.messages.find(m => m.role === 'system');
+    const systemMsg = messages.find(m => m.role === 'system');
     if (systemMsg) {
       upstreamBody.system_instruction = { parts: [{ text: systemMsg.content }] };
       upstreamBody.contents = upstreamBody.contents.filter((m: any) => m.role !== 'system');
@@ -128,36 +136,53 @@ export async function routeToProvider(
     signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
 
-  if (provider === 'google' && res.ok) {
-    const googleRes = (await res.json()) as any;
-    const text = googleRes.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
-    const openaiRes: OpenAIChatCompletion = {
-      id: `gemini-${Date.now()}`,
-      object: 'chat.completion',
-      created: Math.floor(Date.now() / 1000),
-      model,
-      choices: [
-        {
-          index: 0,
-          message: { role: 'assistant', content: text },
-          finish_reason: 'stop',
-        },
-      ],
-      usage: {
-        prompt_tokens: 0, // Gemini native response has different usage format, setting 0 for now
-        completion_tokens: 0,
-        total_tokens: 0,
-      },
-    };
+  if (res.ok) {
+    let finalResJson: any;
+    if (provider === 'google') {
+      const googleRes = (await res.json()) as any;
+      const text = googleRes.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      finalResJson = {
+        id: `gemini-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      };
+    } else {
+      finalResJson = await res.json();
+    }
 
-    return new Response(JSON.stringify(openaiRes), {
+    if (isResponsesAPI) {
+      return convertToResponsesAPI(finalResJson, corsHeaders);
+    }
+
+    return new Response(JSON.stringify(finalResJson), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
   }
 
   return proxyResponse(res, corsHeaders);
+}
+
+function convertToResponsesAPI(chatRes: any, corsHeaders: Record<string, string>): Response {
+  const content = chatRes.choices?.[0]?.message?.content || '';
+  const responsesRes = {
+    id: chatRes.id,
+    object: 'response',
+    output: [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: content }]
+      }
+    ]
+  };
+  return new Response(JSON.stringify(responsesRes), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  });
 }
 
 // ---------------------------------------------------------------------------

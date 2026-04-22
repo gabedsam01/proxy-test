@@ -82,9 +82,11 @@ export default {
       return errorResponse('Could not retrieve API key for this provider', 403, cors);
     }
 
+    const isResponsesPath = url.pathname.includes('/responses');
+
     // ---- Route to provider ----
     try {
-      const response = await routeToProvider(provider, body, apiKey, model, cors);
+      const response = await routeToProvider(provider, body, apiKey, model, cors, isResponsesPath);
 
       // Log usage in the background (non-streaming only)
       if (response.ok && !body.stream) {
