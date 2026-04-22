@@ -33,7 +33,11 @@ export default {
     const isChatPath = url.pathname === '/v1/chat/completions' || 
                        url.pathname === '/chat/completions' ||
                        url.pathname === '/v1/chat/completions/' ||
-                       url.pathname === '/chat/completions/';
+                       url.pathname === '/chat/completions/' ||
+                       url.pathname === '/v1/responses' ||
+                       url.pathname === '/responses' ||
+                       url.pathname === '/v1/responses/' ||
+                       url.pathname === '/responses/';
 
     if (!isChatPath) {
       return errorResponse(`Path not found: ${url.pathname}`, 404, cors);
