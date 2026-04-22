@@ -64,6 +64,23 @@ export default {
       return errorResponse('Model is required', 400, cors);
     }
 
+    const isResponsesPath = url.pathname.includes('/responses');
+
+    // ---- Handle Responses API input conversion ----
+    if (isResponsesPath && body.input) {
+      if (typeof body.input === 'string') {
+        body.messages = [{ role: 'user', content: body.input }];
+      } else if (Array.isArray(body.input)) {
+        body.messages = body.input.map((item: any) => {
+          if (typeof item === 'string') return { role: 'user', content: item };
+          return {
+            role: item.role || 'user',
+            content: item.content || item.text || JSON.stringify(item)
+          };
+        });
+      }
+    }
+
     const parsed = parseModel(body.model);
     if (!parsed) {
       return errorResponse('Invalid model format. Expected provider:model:user_id', 400, cors);
@@ -81,8 +98,6 @@ export default {
     if (!apiKey) {
       return errorResponse('Could not retrieve API key for this provider', 403, cors);
     }
-
-    const isResponsesPath = url.pathname.includes('/responses');
 
     // ---- Route to provider ----
     try {

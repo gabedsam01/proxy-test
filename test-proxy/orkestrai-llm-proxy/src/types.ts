@@ -19,6 +19,7 @@ export interface ChatMessage {
 export interface ChatCompletionRequest {
   model: string;
   messages: ChatMessage[];
+  input?: string | any[];
   temperature?: number;
   top_p?: number;
   max_tokens?: number;
