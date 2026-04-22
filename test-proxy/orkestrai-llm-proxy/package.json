@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"require('fs').copyFileSync('.env', '.dev.vars')\"",
     "dev": "wrangler dev",
+    "predeploy": "node -e \"require('fs').copyFileSync('.env', '.dev.vars')\"",
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit"
   },

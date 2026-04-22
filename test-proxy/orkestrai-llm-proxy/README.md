@@ -22,9 +22,9 @@ The `model` field is used to pass routing instructions. The format is:
    ```
 3. Copy the environment variables example:
    ```bash
-   cp .dev.vars.example .dev.vars
+   cp .env.example .env
    ```
-4. Fill in the values in `.dev.vars`
+4. Fill in the values in `.env`
 5. Run the development server:
    ```bash
    npm run dev
