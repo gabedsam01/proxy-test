@@ -65,7 +65,7 @@ export default {
       return errorResponse('Could not retrieve API key for this provider', 403, cors);
     }
 
-    // ---- Route to upstream ----
+    // ---- Route to provider ----
     try {
       const response = await routeToProvider(provider, body, apiKey, model, cors);
 

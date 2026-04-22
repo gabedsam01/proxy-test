@@ -23,7 +23,7 @@ function getProviderRoute(provider: string, apiKey: string): ProviderRoute | nul
     case 'google':
       return {
         url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        headers: { 'x-goog-api-key': apiKey },
+        headers: { 'Authorization': `Bearer ${apiKey}` },
       };
     case 'openrouter':
       return {
@@ -73,19 +73,89 @@ export async function routeToProvider(
     return routeAnthropic(body, apiKey, model, corsHeaders);
   }
 
-  const route = getProviderRoute(provider, apiKey);
-  if (!route) {
-    return errorResponse(`Unsupported provider: ${provider}`, 400, corsHeaders);
+  let url: string;
+  let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  switch (provider) {
+    case 'openai':
+      url = 'https://api.openai.com/v1/chat/completions';
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      break;
+    case 'google':
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      };
+      break;
+    case 'openrouter':
+      url = 'https://openrouter.ai/api/v1/chat/completions';
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      headers['HTTP-Referer'] = 'https://orkestraai.com';
+      headers['X-Title'] = 'OrkestraAI';
+      break;
+    default:
+      return errorResponse(`Unsupported provider: ${provider}`, 400, corsHeaders);
   }
 
-  const upstreamBody = { ...body, model };
+  let upstreamBody: any = { ...body, model };
 
-  const res = await fetchWithRetry(route.url, {
+  if (provider === 'google') {
+    // Transform OpenAI messages to Google contents
+    upstreamBody = {
+      contents: body.messages.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      })),
+      generationConfig: {
+        temperature: body.temperature,
+        topP: body.top_p,
+        maxOutputTokens: body.max_tokens,
+      },
+    };
+    // If there is a system message, handle it specially for Gemini
+    const systemMsg = body.messages.find(m => m.role === 'system');
+    if (systemMsg) {
+      upstreamBody.system_instruction = { parts: [{ text: systemMsg.content }] };
+      upstreamBody.contents = upstreamBody.contents.filter((m: any) => m.role !== 'system');
+    }
+  }
+
+  const res = await fetchWithRetry(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...route.headers },
+    headers: headers,
     body: JSON.stringify(upstreamBody),
     signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
+
+  if (provider === 'google' && res.ok) {
+    const googleRes = (await res.json()) as any;
+    const text = googleRes.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    const openaiRes: OpenAIChatCompletion = {
+      id: `gemini-${Date.now()}`,
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: text },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: {
+        prompt_tokens: 0, // Gemini native response has different usage format, setting 0 for now
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+    };
+
+    return new Response(JSON.stringify(openaiRes), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
 
   return proxyResponse(res, corsHeaders);
 }
