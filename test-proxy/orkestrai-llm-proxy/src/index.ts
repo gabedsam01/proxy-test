@@ -21,6 +21,14 @@ export default {
       return jsonResponse({ status: 'ok', proxy: 'orkestraai' }, 200, cors);
     }
 
+    // ---- Models list ----
+    if (url.pathname === '/v1/models') {
+      return new Response(JSON.stringify({
+        object: 'list',
+        data: [{ id: 'proxy', object: 'model', owned_by: 'orkestraai' }]
+      }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    }
+
     // ---- Only /v1/chat/completions POST from here ----
     if (url.pathname !== '/v1/chat/completions') {
       return errorResponse('Not found', 404, cors);
