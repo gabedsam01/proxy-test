@@ -22,16 +22,21 @@ export default {
     }
 
     // ---- Models list ----
-    if (url.pathname === '/v1/models') {
+    if (url.pathname === '/v1/models' || url.pathname === '/models') {
       return new Response(JSON.stringify({
         object: 'list',
         data: [{ id: 'proxy', object: 'model', owned_by: 'orkestraai' }]
       }), { headers: { 'Content-Type': 'application/json', ...cors } });
     }
 
-    // ---- Only /v1/chat/completions POST from here ----
-    if (url.pathname !== '/v1/chat/completions') {
-      return errorResponse('Not found', 404, cors);
+    // ---- Routing logic ----
+    const isChatPath = url.pathname === '/v1/chat/completions' || 
+                       url.pathname === '/chat/completions' ||
+                       url.pathname === '/v1/chat/completions/' ||
+                       url.pathname === '/chat/completions/';
+
+    if (!isChatPath) {
+      return errorResponse(`Path not found: ${url.pathname}`, 404, cors);
     }
     if (request.method !== 'POST') {
       return errorResponse('Method not allowed', 405, cors);

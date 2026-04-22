@@ -45,7 +45,7 @@ export function jsonResponse(
 }
 
 export function parseModel(raw: string): ParsedModel | null {
-  const parts = raw.split(':');
+  const parts = raw.trim().split(':');
   if (parts.length < 3) return null;
   return {
     provider: parts[0],
